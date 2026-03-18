@@ -12,7 +12,7 @@ app_password = st.sidebar.text_input("請輸入內部密碼解鎖系統", type="
 
 # 假設你設定的密碼是 "uni2026"
 if app_password != "unipro@":
-    st.warning("🔒 這是環久內部專用系統，請在左側輸入正確密碼以解鎖功能。擅自盜用必將追究")
+    st.warning("🔒 這是環久內部專用系統，請在左側輸入正確密碼以解鎖功能。未經授權擅自使用必將追究")
     st.stop() # 密碼不對，程式就停在這裡
 
 # --- 1. 配置區域 ---
