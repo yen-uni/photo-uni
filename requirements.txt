@@ -1,5 +1,3 @@
 streamlit
-rembg[cpu]
+requests
 Pillow
-opencv-python-headless
-numpy
