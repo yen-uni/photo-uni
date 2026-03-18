@@ -2,4 +2,3 @@ streamlit
 requests
 Pillow
 streamlit-cropper
-replicate
