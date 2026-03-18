@@ -86,18 +86,4 @@ if uploaded_file is not None:
 
 st.markdown("---")
 st.markdown("ﾩ 2023 跨國人力文件處理系統")
-🔧 關鍵修改說明
-1. 背景顏色修正
-# ❌ 舊版 (無效)
-"background_color": "#FFFFFF"
-
-# ✅ 新版 (正確)
-"background.color": "ffffff"  # 注意: 不含 # 號,使用點號分隔
-2. 裁切模式改為證件照專用
-# ❌ 舊版 (過度緊密)
-"crop": "true",
-"auto_crop_padding": "0.0"
-
-# ✅ 新版 (標準證件照比例)
-"crop": "passport",  # 專為護照/證件照設計
-"padding": "0.15"    # 15% 留白,符合台灣規範
+# 15% 留白,符合台灣規範
