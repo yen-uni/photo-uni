@@ -130,4 +130,4 @@ if uploaded_file is not None:
                     st.error(f"❌ 發生錯誤: {str(e)}")
 
 st.markdown("---")
-st.markdown("© 2026 跨國人力文件處理系統 | Powered by Remove.bg (Free API)")
+st.markdown("© 2026 環久國際開發有限公司人力文件處理系統 | ")
