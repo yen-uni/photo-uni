@@ -10,9 +10,9 @@ st.set_page_config(page_title="居留證大頭照處理系統", layout="centered
 # 在側邊欄設定密碼輸入框
 app_password = st.sidebar.text_input("請輸入內部密碼解鎖系統", type="password")
 
-# 假設你設定的密碼是 "uni2026"
-if app_password != "uni2026":
-    st.warning("🔒 這是內部專用系統，請在左側輸入正確密碼以解鎖功能。")
+# 假設你設定的密碼是 "unipro@"
+if app_password != "unipro@":
+    st.warning("🔒 這是環久內部專用系統，請在左側輸入正確密碼以解鎖功能。擅自盜用必將追究")
     st.stop() # 密碼不對，程式就停在這裡，完全保護系統
 
 # --- 1. 配置區域 ---
