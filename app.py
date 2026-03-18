@@ -23,7 +23,7 @@ except:
 TARGET_WIDTH_PX = 413
 TARGET_HEIGHT_PX = 531
 
-st.title("🇹🇼 居留證大頭照極速系統")
+st.title("🇹🇼 環久大頭照證件照極速系統V8")
 st.info(
     "預設規格：台灣身分證/居留證 (3.5×4.5cm, 300dpi)。\n\n"
     "**操作步驟:**\n"
