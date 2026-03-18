@@ -1,38 +1,42 @@
 import streamlit as st
+import requests
 from PIL import Image, ImageEnhance
 import io
 from streamlit_cropper import st_cropper
-from rembg import remove, new_session # 引入 new_session 功能
+
+# --- 0. 系統安全鎖 (防路人攻擊) ---
+st.set_page_config(page_title="居留證大頭照處理系統", layout="centered")
+
+# 在側邊欄設定密碼輸入框
+app_password = st.sidebar.text_input("請輸入內部密碼解鎖系統", type="password")
+
+# 假設你設定的密碼是 "uni2026"
+if app_password != "uni2026":
+    st.warning("🔒 這是內部專用系統，請在左側輸入正確密碼以解鎖功能。")
+    st.stop() # 密碼不對，程式就停在這裡，完全保護系統
 
 # --- 1. 配置區域 ---
-TARGET_WIDTH_PX = 827
-TARGET_HEIGHT_PX = 1063
+try:
+    REMOVEBG_API_KEY = st.secrets["REMOVEBG_API_KEY"]
+except:
+    REMOVEBG_API_KEY = ""
 
-st.set_page_config(page_title="居留證大頭照手動裁切系統", layout="centered")
-st.title("🇹🇼 居留證大頭照裁切與去背系統 (優化免費版)")
+# 配合免費版 API 的極限，設定標準 300DPI 的基本像素
+TARGET_WIDTH_PX = 413
+TARGET_HEIGHT_PX = 531
 
+st.title("🇹🇼 居留證大頭照裁切與去背系統 (極速免費版)")
 st.info(
     "預設規格：台灣身分證/居留證 (3.5×4.5cm, 300dpi)。\n\n"
     "**操作步驟:**\n"
     "1. 上傳照片後，使用滑桿調整亮度。\n"
     "2. 拖拉紅色方框，圈選大頭範圍 (請保留最大頭部比例)。\n"
-    "3. 點擊生成按鈕，系統會使用內建 AI 進行去背。\n"
+    "3. 點擊生成按鈕，系統將呼叫 Remove.bg 免費極速去背。\n"
 )
-
-# --- ★ 核心優化：會話復用 (Session Reuse) ★ ---
-# 使用 st.cache_resource 讓這個 AI 模型只在第一次啟動時載入，之後就常駐，避免每次按鈕都當機！
-@st.cache_resource(show_spinner="系統正在初始化 AI 模型 (初次載入需等候 1-2 分鐘，請勿關閉網頁)...")
-def get_rembg_session():
-    # 這裡預設使用 u2net，如果你想挑戰伺服器極限，可以改成 new_session("bria-rmbg")
-    return new_session("u2net")
-
-# 啟動時先取得 session
-session = get_rembg_session()
 
 # --- 2. 檔案上傳 ---
 uploaded_file = st.file_uploader("請上傳員工照片 (JPG, JPEG, PNG)", type=["jpg", "jpeg", "png"])
 
-# --- 3. 手動裁切與處理邏輯 ---
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     
@@ -60,45 +64,68 @@ if uploaded_file is not None:
         process_btn = st.button("🚀 確認裁切並去背換白底", use_container_width=True)
 
     if process_btn:
-        with st.spinner("內建 AI 正在進行高品質去背，請稍候 (約需 5-10 秒)..."):
-            try:
-                # 這裡把我們剛剛快取的 session 傳進去，大幅降低當機機率與處理時間
-                transparent_image = remove(cropped_image, session=session).convert("RGBA")
+        if not REMOVEBG_API_KEY:
+            st.error("❌ 找不到金鑰，請確認 Streamlit Secrets 中設定了 `REMOVEBG_API_KEY`！")
+        else:
+            with st.spinner("Remove.bg 正在進行極速去背，請稍候 (約 1-2 秒)..."):
+                try:
+                    # 將裁切好的圖轉為 bytes
+                    img_byte_arr = io.BytesIO()
+                    cropped_image.save(img_byte_arr, format='PNG')
+                    img_data = img_byte_arr.getvalue()
 
-                # 墊上純白背景
-                white_bg = Image.new("RGBA", transparent_image.size, "WHITE")
-                white_bg.paste(transparent_image, (0, 0), transparent_image)
-                final_rgb_image = white_bg.convert("RGB")
+                    # 呼叫 Remove.bg API
+                    response = requests.post(
+                        'https://api.remove.bg/v1.0/removebg',
+                        files={'image_file': img_data},
+                        data={
+                            'size': 'preview', # 強制指定使用 preview，確保使用免費額度
+                            'format': 'png'
+                        },
+                        headers={'X-Api-Key': REMOVEBG_API_KEY},
+                    )
 
-                # 強制調整為 300dpi 規格
-                final_image = final_rgb_image.resize((TARGET_WIDTH_PX, TARGET_HEIGHT_PX), Image.Resampling.LANCZOS)
+                    if response.status_code == 200:
+                        # 取得去背後的透明 PNG
+                        transparent_image = Image.open(io.BytesIO(response.content)).convert("RGBA")
 
-                st.success("🎉 處理成功！標準大頭照已生成")
-                
-                st.subheader("✅ 最終大頭照成果 (3.5×4.5cm)")
-                col_result1, col_result2 = st.columns([1, 1])
-                with col_result1:
-                    st.image(final_image, width=300)
-                
-                with col_result2:
-                    st.write("規格詳情：")
-                    st.write(f"- 寬度: {TARGET_WIDTH_PX}px")
-                    st.write(f"- 高度: {TARGET_HEIGHT_PX}px")
-                    st.write("- 解析度: 300 DPI")
-                    st.write("- 背景: 純白 (#FFFFFF)")
+                        # 墊上純白背景
+                        white_bg = Image.new("RGBA", transparent_image.size, "WHITE")
+                        white_bg.paste(transparent_image, (0, 0), transparent_image)
+                        final_rgb_image = white_bg.convert("RGB")
 
-                # 準備下載
-                final_byte_arr = io.BytesIO()
-                final_image.save(final_byte_arr, format='PNG', quality=100, dpi=(300, 300))
-                
-                st.download_button(
-                    label="📥 下載標準大頭照 (300dpi 高品質)",
-                    data=final_byte_arr.getvalue(),
-                    file_name=f"Taiwan_ID_Photo_{uploaded_file.name.split('.')[0]}.png",
-                    mime="image/png"
-                )
-            except Exception as e:
-                st.error(f"❌ 發生錯誤 (可能是伺服器記憶體不足): {str(e)}")
+                        # 強制調整為台灣身分證 300dpi 的基本像素
+                        final_image = final_rgb_image.resize((TARGET_WIDTH_PX, TARGET_HEIGHT_PX), Image.Resampling.LANCZOS)
+
+                        st.success("🎉 處理成功！極速去背完成")
+                        
+                        st.subheader("✅ 最終大頭照成果 (3.5×4.5cm)")
+                        col_result1, col_result2 = st.columns([1, 1])
+                        with col_result1:
+                            st.image(final_image, width=300)
+                        
+                        with col_result2:
+                            st.write("規格詳情：")
+                            st.write(f"- 寬度: {TARGET_WIDTH_PX}px")
+                            st.write(f"- 高度: {TARGET_HEIGHT_PX}px")
+                            st.write("- 解析度: 300 DPI")
+                            st.write("- 背景: 純白 (#FFFFFF)")
+
+                        # 準備下載
+                        final_byte_arr = io.BytesIO()
+                        final_image.save(final_byte_arr, format='PNG', quality=100, dpi=(300, 300))
+                        
+                        st.download_button(
+                            label="📥 下載標準大頭照",
+                            data=final_byte_arr.getvalue(),
+                            file_name=f"Taiwan_ID_Photo_{uploaded_file.name.split('.')[0]}.png",
+                            mime="image/png"
+                        )
+                    else:
+                        st.error(f"❌ API 錯誤: {response.status_code}")
+                        st.error(response.text)
+                except Exception as e:
+                    st.error(f"❌ 發生錯誤: {str(e)}")
 
 st.markdown("---")
-st.markdown("© 2026 環久國際文件處理系統 | Powered by rembg (優化會話版)")
+st.markdown("© 2026 環久國際文件處理系統 | Powered by Remove.bg (Free API)")
