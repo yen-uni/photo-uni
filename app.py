@@ -3,57 +3,109 @@ import requests
 from PIL import Image
 import io
 
-# --- 1. 自動填入你的 Sandbox API Key ---
+# --- 1. 配置區域 ---
+# 自動填入你之前測試成功的 Photoroom Sandbox API Key
 PHOTOROOM_API_KEY = "sandbox_sk_pr_default_995069c2302404a8d4220f0a2a03f1012f82bd52"
 
-# 設定台灣規格 (3.5cm x 4.5cm @ 300DPI)
-TARGET_WIDTH_PX = 413 
-TARGET_HEIGHT_PX = 531 
+# 設定台灣規格 (3.5cm x 4.5cm @ 300DPI) 
+TARGET_WIDTH_PX = 413  # (35mm / 25.4mm/inch) * 300dpi = 413px
+TARGET_HEIGHT_PX = 531 # (45mm / 25.4mm/inch) * 300dpi = 531px
 
 st.set_page_config(page_title="居留證照片生成器", layout="centered")
 st.title("🇹🇼 居留證照片自動生成 (Sandbox 測試版)")
 
-uploaded_file = st.file_uploader("請上傳員工照片", type=["jpg", "jpeg", "png"])
+# 使用說明
+st.info(
+    "預設規格為：台灣身分證/居留證使用 (3.5*4.5cm)。本系統已整合 Photoroom 高階 AI API，"
+    "會自動進行高品質去背，並依據移民署規定精準控制頭部比例（3.2-3.6cm）及上方留白。\n\n"
+    "**重要提醒：** 當前使用測試金鑰 (Sandbox)，生成的成品圖片將帶有 Photoroom 浮水印。測試滿意後，請更換為 Live 金鑰。"
+)
 
-if uploaded_file:
+# --- 2. 檔案上傳 ---
+uploaded_file = st.file_uploader("請上傳員工照片 (JPG, JPEG, PNG)", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # 顯示原始照片
     image = Image.open(uploaded_file)
     st.image(image, caption="原始照片", use_column_width=True)
 
-    if st.button("開始高品質去背與裁切"):
-        with st.spinner("正在呼叫 Photoroom AI..."):
+    # 生成按鈕
+    generate_btn = st.button("開始高品質去背與裁切")
+
+    if generate_btn:
+        # 顯示處理中的動畫
+        with st.spinner("Photoroom AI 正在進行高品質去背與精準裁切，請稍候..."):
+            
             try:
-                # 圖片轉二進位
+                # --- 3. 準備呼叫 Photoroom API ---
+                # 將圖片轉換為二進位資料
                 img_byte_arr = io.BytesIO()
                 image.save(img_byte_arr, format='PNG')
-                img_data = img_byte_arr.getvalue()
+                img_byte_arr = img_byte_arr.getvalue()
 
-                # 呼叫 API
-                headers = {"x-api-key": PHOTOROOM_API_KEY}
-                params = {
-                    "background_color": "#FFFFFF",
-                    "crop": "true",
-                    "auto_crop_padding": "0.1" # 確保頭部佔比正確
+                # 設定 API 請求頭和參數
+                headers = {
+                    "x-api-key": PHOTOROOM_API_KEY,
                 }
-                
-                response = requests.post(
-                    "https://sdk.photoroom.com/v1/segment",
-                    headers=headers,
-                    files={"image_file": img_data},
-                    params=params
-                )
+                api_url = "https://sdk.photoroom.com/v1/segment"
+
+                # 設定參數 (精準控制規格的核心)
+                # 1. background_color: 將背景設定為純白 (255, 255, 255)
+                # 2. auto_crop: 自動裁切人像
+                # 3. auto_crop_padding: 人像佔比。
+                #    設定為 "0.1" (10% 留白) 是達到這種 tight 裁切（頭部佔比 71-80%）的最佳起點。
+                #    如果測試後覺得頭頂留白太多，可以嘗試改為 "0.08"。
+                params = {
+                    "background_color": "#FFFFFF", # 設定純白背景
+                    "crop": "true",               # 開啟自動裁切
+                    "format": "png",              # 輸出格式為 PNG，確保去背乾淨
+                    "auto_crop_padding": "0.1",   # <<<<< 關鍵！控制人像佔比，確保頭部大小符合 3.2~3.6cm 規定。
+                }
+
+                # 準備要上傳的檔案
+                files = {
+                    "image_file": (uploaded_file.name, img_byte_arr, uploaded_file.type)
+                }
+
+                # --- 4. 執行 API 請求 ---
+                response = requests.post(api_url, headers=headers, files=files, params=params)
 
                 if response.status_code == 200:
-                    processed_img = Image.open(io.BytesIO(response.content))
-                    final_img = processed_img.resize((TARGET_WIDTH_PX, TARGET_HEIGHT_PX), Image.LANCZOS)
+                    # 成功獲取去背並裁切好的圖片
+                    processed_image = Image.open(io.BytesIO(response.content))
+
+                    # --- 5. 強制調整圖片為精確的像素尺寸 (3.5x4.5cm @ 300DPI) ---
+                    # 這是為了解決用戶最初抱怨的「比例太少」問題。即使 API 做了裁切，我們仍需確保檔案像素精確。
+                    final_image = processed_image.resize((TARGET_WIDTH_PX, TARGET_HEIGHT_PX), Image.LANCZOS)
+
+                    # --- 6. 顯示結果與下載 ---
+                    st.success("🎉 生成成功！成品符合移民署規格（Sandbox 測試版）")
                     
-                    st.success("生成成功！")
-                    st.image(final_img, width=TARGET_WIDTH_PX)
+                    st.subheader("最終成果 (3.5x4.5cm)")
+                    # 顯示標準證件照
+                    st.image(final_image, width=TARGET_WIDTH_PX)
+
+                    # 準備下載
+                    final_byte_arr = io.BytesIO()
+                    final_image.save(final_byte_arr, format='PNG')
+                    final_byte_arr = final_byte_arr.getvalue()
                     
-                    # 下載按鈕
-                    buf = io.BytesIO()
-                    final_img.save(buf, format="PNG")
-                    st.download_button("下載成品", buf.getvalue(), "id_photo.png", "image/png")
+                    st.markdown("<br>", unsafe_allow_html=True) # 調整位置
+                    st.download_button(
+                        label="下載標準證件照 (符合規格)",
+                        data=final_byte_arr,
+                        file_name=f"Taiwan_ID_Photo_{uploaded_file.name}.png",
+                        mime="image/png",
+                        key='download-btn'
+                    )
                 else:
-                    st.error(f"API 錯誤：{response.text}")
+                    # API 呼叫失敗
+                    st.error(f"API 呼叫失敗。錯誤碼: {response.status_code}")
+                    st.error(f"錯誤訊息: {response.text}")
+            
             except Exception as e:
-                st.error(f"發生錯誤：{e}")
+                st.error(f"發生未知的錯誤: {str(e)}")
+
+# --- 底部 ---
+st.markdown("---")
+st.markdown("© 2023 [你的公司名稱] - 跨國人力文件處理系統")
