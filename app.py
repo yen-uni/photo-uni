@@ -11,13 +11,13 @@ PHOTOROOM_API_KEY = "sandbox_sk_pr_default_995069c2302404a8d4220f0a2a03f1012f82b
 TARGET_WIDTH_PX = 413  # (35mm / 25.4mm/inch) * 300dpi = 413px
 TARGET_HEIGHT_PX = 531 # (45mm / 25.4mm/inch) * 300dpi = 531px
 
-st.set_page_config(page_title="居留證照片生成器", layout="centered")
-st.title("🇹🇼 居留證照片自動生成 (Sandbox 測試版)")
+st.set_page_config(page_title="居留證大頭照生成器", layout="centered")
+st.title("🇹🇼 居留證大頭照自動生成 (Sandbox 測試版)")
 
 # 使用說明
 st.info(
-    "預設規格為：台灣身分證/居留證使用 (3.5*4.5cm)。本系統已整合 Photoroom 高階 AI API，"
-    "會自動進行高品質去背，並依據移民署規定精準控制頭部比例（3.2-3.6cm）及上方留白。\n\n"
+    "預設規格為：台灣身分證/居留證使用 (3.5*4.5cm)。本系統已升級，採用最嚴格的「大頭」規格，"
+    "自動進行高品質去背，並使頭部在畫面中最大化，最小化肩膀，以符合 `image_11.png` 的標準。\n\n"
     "**重要提醒：** 當前使用測試金鑰 (Sandbox)，生成的成品圖片將帶有 Photoroom 浮水印。測試滿意後，請更換為 Live 金鑰。"
 )
 
@@ -30,11 +30,11 @@ if uploaded_file is not None:
     st.image(image, caption="原始照片", use_column_width=True)
 
     # 生成按鈕
-    generate_btn = st.button("開始高品質去背與裁切")
+    generate_btn = st.button("開始高品質生成大頭照格")
 
     if generate_btn:
         # 顯示處理中的動畫
-        with st.spinner("Photoroom AI 正在進行高品質去背與精準裁切，請稍候..."):
+        with st.spinner("Photoroom AI 正在進行高品質去背與嚴格大頭裁切，請稍候..."):
             
             try:
                 # --- 3. 準備呼叫 Photoroom API ---
@@ -49,17 +49,17 @@ if uploaded_file is not None:
                 }
                 api_url = "https://sdk.photoroom.com/v1/segment"
 
-                # 設定參數 (精準控制規格的核心)
+                # 設定參數 (精準控制大頭格式的核心)
                 # 1. background_color: 將背景設定為純白 (255, 255, 255)
                 # 2. auto_crop: 自動裁切人像
                 # 3. auto_crop_padding: 人像佔比。
-                #    設定為 "0.1" (10% 留白) 是達到這種 tight 裁切（頭部佔比 71-80%）的最佳起點。
-                #    如果測試後覺得頭頂留白太多，可以嘗試改為 "0.08"。
+                #    之前的 "0.1" (10% 留白) 保留太多肩膀。
+                #    我們將其改為 "0.0" (0% 留白)，使頭部最大化，符合用戶要求的 `image_11.png` 格式。
                 params = {
                     "background_color": "#FFFFFF", # 設定純白背景
                     "crop": "true",               # 開啟自動裁切
                     "format": "png",              # 輸出格式為 PNG，確保去背乾淨
-                    "auto_crop_padding": "0.1",   # <<<<< 關鍵！控制人像佔比，確保頭部大小符合 3.2~3.6cm 規定。
+                    "auto_crop_padding": "0.0",   # <<<<< 關鍵修改！0% 填充，最大化頭部，最小化肩膀 (大頭版本)。
                 }
 
                 # 準備要上傳的檔案
@@ -75,14 +75,14 @@ if uploaded_file is not None:
                     processed_image = Image.open(io.BytesIO(response.content))
 
                     # --- 5. 強制調整圖片為精確的像素尺寸 (3.5x4.5cm @ 300DPI) ---
-                    # 這是為了解決用戶最初抱怨的「比例太少」問題。即使 API 做了裁切，我們仍需確保檔案像素精確。
+                    # 即使 API 做了裁切，我們仍需確保檔案像素精確，這是為了解決用戶最初抱怨的「比例太少」問題。
                     final_image = processed_image.resize((TARGET_WIDTH_PX, TARGET_HEIGHT_PX), Image.LANCZOS)
 
                     # --- 6. 顯示結果與下載 ---
-                    st.success("🎉 生成成功！成品符合移民署規格（Sandbox 測試版）")
+                    st.success("🎉 大頭照格式生成成功！符合 `image_11.png` 格式（Sandbox 測試版）")
                     
-                    st.subheader("最終成果 (3.5x4.5cm)")
-                    # 顯示標準證件照
+                    st.subheader("最終成果 (大頭照 3.5x4.5cm)")
+                    # 顯示標準大頭照
                     st.image(final_image, width=TARGET_WIDTH_PX)
 
                     # 準備下載
@@ -92,7 +92,7 @@ if uploaded_file is not None:
                     
                     st.markdown("<br>", unsafe_allow_html=True) # 調整位置
                     st.download_button(
-                        label="下載標準證件照 (符合規格)",
+                        label="下載標準大頭照 (符合規格)",
                         data=final_byte_arr,
                         file_name=f"Taiwan_ID_Photo_{uploaded_file.name}.png",
                         mime="image/png",
