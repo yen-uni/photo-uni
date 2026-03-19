@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw
 import io
 from streamlit_cropper import st_cropper
 
@@ -38,7 +38,7 @@ st.title("🇹🇼 環久大頭照證件照極速與列印系統V9")
 st.info(
     "功能：生成標準大頭照，並自動排版為 4x6 吋列印檔。\n\n"
     "**操作步驟:**\n"
-    "1. 框選大頭範圍 -> 2. 調亮度去背 -> 3. (新增) 選擇排版下載列印檔。\n"
+    "1. 框選大頭範圍 -> 2. 調亮度去背 (可核對輔助線) -> 3. 選擇排版下載列印檔。\n"
 )
 
 # --- 函數定義：產生 4x6 排版檔 ---
@@ -53,7 +53,7 @@ def generate_4x6_layout(single_photo, layout_type):
     if layout_type == "2inch":
         # 2吋證件照 (3.5x4.5cm, 413x531px)
         # 排版：4 欄 x 2 列 = 8 張
-        photo_w, photo_h = single_photo.size # 預期為 413x531
+        photo_w, photo_h = single_photo.size 
         
         # 計算間距以均勻分佈 (邊距 30px, 水平間距 30px, 垂直間距 40px)
         margin_x = 30
@@ -113,16 +113,55 @@ if uploaded_file is not None:
         key='main_cropper'
     )
 
-    st.write("### ☀️ 第二步：調整亮度並預覽")
+    st.write("### ☀️ 第二步：調整亮度與核對頭部比例")
     
     brightness = st.slider("調整照片亮度", 0.5, 2.0, 1.1, 0.1)
     enhancer = ImageEnhance.Brightness(cropped_image)
     final_preview = enhancer.enhance(brightness)
 
+    # --- 繪製護照頭圍比例輔助線 ---
+    def add_passport_guidelines(img):
+        guide_img = img.copy()
+        draw = ImageDraw.Draw(guide_img)
+        w, h = guide_img.size
+        
+        # 護照規定：總高 4.5cm。頭頂通常距離邊緣約 0.4cm
+        top_margin = int(h * (0.4 / 4.5)) 
+        
+        # 3.6cm 最大範圍橢圓 (紅色)
+        max_h = int(h * (3.6 / 4.5))
+        max_w = int(w * 0.72) # 抓一個適中的臉部寬度比例
+        max_x0 = (w - max_w) // 2
+        draw.ellipse([max_x0, top_margin, max_x0 + max_w, top_margin + max_h], outline="red", width=3)
+        
+        # 3.2cm 最小範圍橢圓 (綠色)
+        min_h = int(h * (3.2 / 4.5))
+        min_w = int(w * 0.62)
+        min_x0 = (w - min_w) // 2
+        draw.ellipse([min_x0, top_margin, min_x0 + min_w, top_margin + min_h], outline="#00FF00", width=3)
+        
+        # 加上中心垂直虛線，輔助臉部置中對齊
+        center_x = w // 2
+        for y in range(0, h, 10):
+            draw.line([(center_x, y), (center_x, y+5)], fill="gray", width=1)
+            
+        return guide_img
+
     col_preview, col_action = st.columns([1, 1])
     
     with col_preview:
-        st.image(final_preview, caption="最終範圍與亮度預覽", width=250)
+        # 讓使用者可以自由開關輔助線，以免影響視覺確認
+        show_guide = st.checkbox("👁️ 顯示護照頭圍輔助線", value=True)
+        display_img = add_passport_guidelines(final_preview) if show_guide else final_preview
+        
+        st.image(display_img, caption="最終範圍與亮度預覽", width=250)
+        
+        if show_guide:
+            st.markdown(
+                "<span style='color:red'>■ 紅圈：頭頂到下巴不得大於 3.6cm</span><br>"
+                "<span style='color:#00FF00'>■ 綠圈：頭頂到下巴不得小於 3.2cm</span>", 
+                unsafe_allow_html=True
+            )
 
     with col_action:
         st.write("確認預覽的範圍無誤後，即可點擊按鈕生成標準單張大頭照。")
